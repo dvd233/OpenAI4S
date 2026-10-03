@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  SOURCE_SHA: b386198c51447cfbde7c78c2cdd039285f1a9b07
+  SOURCE_SHA: bd0ea241f773ecc35436b948fb53901913b25c00
 
 jobs:
   dataset:
@@ -38,6 +38,24 @@ jobs:
         run: uv sync --locked --extra science
       - name: Run real native dataset input and analysis contracts
         run: uv run pytest tests/test_dataset_import.py -v --junitxml=dataset-input.xml
+      - name: Confirm all six new workflow cases actually executed
+        if: success() || failure()
+        run: |
+          uv run python - <<'PY'
+          from xml.etree import ElementTree
+          root = ElementTree.parse("dataset-input.xml").getroot()
+          prefixes = (
+              "test_native_input_analysis_keeps_its_exact_lineage_after_store_reopen",
+              "test_refused_reimport_leaves_the_prior_input_available_for_exact_analysis",
+          )
+          cases = [case for case in root.iter("testcase")
+                   if case.attrib["name"].startswith(prefixes)]
+          assert len(cases) == 6, "expected the six joined workflow cases"
+          assert all(not any(case.find(kind) is not None
+                             for kind in ("skipped", "failure", "error"))
+                     for case in cases), "a joined workflow case did not pass"
+          print("All six new workflow cases executed successfully")
+          PY
 
   offline:
     name: Full offline suite (Python 3.12)
