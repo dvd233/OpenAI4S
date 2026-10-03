@@ -1,0 +1,91 @@
+# Fork-only verification of a fixed contribution source.
+# Jobs check out SOURCE_SHA, not this workflow branch. No publication or
+# repository secrets are used. Upstream PR CI remains required before merge.
+name: Dataset input acceptance
+
+on:
+  push:
+    branches: [test/native-dataset-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: b386198c51447cfbde7c78c2cdd039285f1a9b07
+
+jobs:
+  dataset:
+    name: Dataset input (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install locked dev and science dependencies
+        run: uv sync --locked --extra science
+      - name: Run real native dataset input and analysis contracts
+        run: uv run pytest tests/test_dataset_import.py -v --junitxml=dataset-input.xml
+
+  offline:
+    name: Full offline suite (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev, science and chemistry dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Run complete offline suite
+        run: uv run pytest -n auto --maxprocesses=4 --dist loadfile
+
+  static:
+    name: Full pre-commit, types, documentation and source scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev dependencies
+        run: uv sync --locked
+      - name: Run full pre-commit
+        run: uv run pre-commit run --all-files
+      - name: Verify core types
+        if: success() || failure()
+        run: uv run mypy
+      - name: Verify bilingual directory documentation
+        if: success() || failure()
+        run: uv run python scripts/check_directory_readmes.py
+      - name: Scan tracked sources for credentials
+        if: success() || failure()
+        run: uv run python scripts/source_secret_scan.py
