@@ -27,6 +27,6 @@ F-19 Customize domain logic. Tab state machine, timer lease (unmount clears ever
 | [`tabs.test.ts`](tabs.test.ts) | Tab state machine; an in-place refresh re-reads only the tab on screen and never remounts it or closes its editor. |
 | [`telemetry.ts`](telemetry.ts) | Consent drain loop; contract `telemetryRow(host)`. |
 | [`timers.ts`](timers.ts) | Per-mount timer lease. Dispose on unmount. |
-| [`timers.test.ts`](timers.test.ts) | Unmount leaves zero timers; Volcengine key poll; vendor helpers; window exports. |
+| [`timers.test.ts`](timers.test.ts) | Unmount leaves zero timers; Volcengine key poll; vendor helpers; window exports await the actual lazy Settings import before checking the open state and requested tab. |
 | [`vendors.ts`](vendors.ts) | DataPro index-complete; Doubao dedicated-source check. |
 | [`volcengine.ts`](volcengine.ts) | Quota math; key-poll 2500/5000×24 bound to a lease. |

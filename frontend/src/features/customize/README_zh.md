@@ -27,6 +27,6 @@ F-19 Customize 领域逻辑。Tab 状态机、定时器租约（unmount 清掉�
 | [`tabs.test.ts`](tabs.test.ts) | Tab 状态机；原地刷新只重读正在显示的 tab，不重新挂载，也不关闭它的编辑器。 |
 | [`telemetry.ts`](telemetry.ts) | 同意开关 drain 循环；契约 `telemetryRow(host)`。 |
 | [`timers.ts`](timers.ts) | 按挂载的定时器租约。unmount 即 dispose。 |
-| [`timers.test.ts`](timers.test.ts) | unmount 后零残留；火山 key 轮询；vendor 辅助；window 导出。 |
+| [`timers.test.ts`](timers.test.ts) | unmount 后零残留；火山 key 轮询；vendor 辅助；window 导出等待真实的 Settings 懒加载完成后，再核对打开状态和目标页签。 |
 | [`vendors.ts`](vendors.ts) | DataPro index-complete；豆包专用 source 检查。 |
 | [`volcengine.ts`](volcengine.ts) | 额度计算；key 轮询 2500/5000×24 绑在租约上。 |
