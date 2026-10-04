@@ -2,6 +2,12 @@
 
 [English](README.md)
 
+`native-dataset-browser-validation.yml` 仅在 fork 的 Linux 上运行，无凭据；
+固定公开生产 SHA，与独立 checkout 的浏览器/daemon 验收辅助代码分开。
+覆盖原生输入到结果的浏览器全流程及未修改 main 的缺失版本边对照；只上传
+脱敏回执和合成数据截图，daemon 数据及 token 文件保留在本地。它不替代上游
+PR CI、code-owner 审批或 sandbox/live-model 门禁。
+
 仓库的 CI 全在这五个文件里：每个 PR 都要过的默认检查门，加上 release 发布、
 容器镜像发布、有界协议模糊测试和 Scorecard。它们只用来跑这个仓库的代码，不会随 Python 包一起发布。
 

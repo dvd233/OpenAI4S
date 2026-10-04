@@ -1,0 +1,117 @@
+# Fork-only evidence. Production source and validation helpers are separate.
+name: Native dataset browser acceptance
+
+on:
+  push:
+    branches: [test/native-dataset-browser-validation]
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/native-dataset-browser-validation'
+    name: Native browser (${{ matrix.case }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: fixed-source
+            source: cfc5bb46fe577aabb4be58122216164664301a23
+            negative: "0"
+          - case: baseline-control
+            source: 36ca586d619e2fa1a75ad2f35b3d16430671f2f3
+            negative: "1"
+    steps:
+      - name: Checkout validation helpers at the triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: helpers
+          persist-credentials: false
+      - name: Checkout exact public production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.source }}
+          path: source
+          persist-credentials: false
+      - name: Verify separate source identities
+        env:
+          SOURCE_SHA: ${{ matrix.source }}
+          HELPER_SHA: ${{ github.sha }}
+        run: |
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C helpers rev-parse HEAD)" = "$HELPER_SHA"
+          test -z "$(git -C source status --porcelain)"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install locked science and Chromium test dependencies
+        working-directory: source
+        run: |
+          uv sync --locked --extra science
+          npm ci --ignore-scripts
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Validate helpers and bilingual directory inventory
+        if: matrix.case == 'fixed-source'
+        working-directory: helpers
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/source/.venv
+          UV_NO_SYNC: "1"
+        run: |
+          uv run pre-commit run --all-files
+          node --check tests/browser_native_dataset.mjs
+          uv run python scripts/check_directory_readmes.py
+          uv run python scripts/source_secret_scan.py
+          git diff --check
+      - name: Real composer, native imports, old-version analysis and provenance
+        working-directory: source
+        env:
+          OPENAI4S_SOURCE_ROOT: ${{ github.workspace }}/source
+          OPENAI4S_SOURCE_SHA: ${{ matrix.source }}
+          OPENAI4S_PYTHON: ${{ github.workspace }}/source/.venv/bin/python
+          OPENAI4S_NATIVE_BROWSER_OUTPUT: ${{ runner.temp }}/native-browser-evidence
+          OPENAI4S_NATIVE_BROWSER_NEGATIVE: ${{ matrix.negative }}
+        run: node ../helpers/tests/browser_native_dataset.mjs
+      - name: Verify phases and unchanged production source
+        working-directory: source
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/native-browser-evidence
+          SOURCE_SHA: ${{ matrix.source }}
+          NEGATIVE: ${{ matrix.negative }}
+        run: |
+          .venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads((Path(os.environ['OUTPUT_ROOT']) / 'receipt.json').read_text())
+          assert receipt['status'] == 'passed'
+          assert receipt['source_sha'] == os.environ['SOURCE_SHA']
+          phases = [p['phase'] for p in receipt['phases']]
+          if os.environ['NEGATIVE'] == '1':
+              assert phases.count('baseline-missing-exact-input-confirmed') == 1
+              assert phases.count('shutdown') == 1
+          else:
+              assert phases.count('browser-provenance') == 2
+              assert phases.count('browser-source-history') == 2
+              assert phases.count('shutdown') == 2
+              assert phases.count('reopen') == 1
+          assert not receipt['browser_errors'] and not receipt['external_requests']
+          print(json.dumps({'source': receipt['source_sha'], 'phases': phases}))
+          PY
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Preserve only sanitized receipt and synthetic screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-browser-${{ matrix.case }}
+          path: |
+            ${{ runner.temp }}/native-browser-evidence/receipt.json
+            ${{ runner.temp }}/native-browser-evidence/*-round-*.png
+          if-no-files-found: error
+          retention-days: 14

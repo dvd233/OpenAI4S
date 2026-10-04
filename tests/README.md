@@ -18,6 +18,8 @@ The offline correctness gate for OpenAI4S. `uv run pytest` runs every module her
 
 | File | Responsibility |
 | --- | --- |
+| [`browser_native_dataset.mjs`](browser_native_dataset.mjs) | Fork-only Linux acceptance through the real composer: discovery, two same-byte native imports, explicit old-version Python analysis, exact durable input edge, visible provenance/source history and daemon reopen without replay. Filename-only UI input labels are checked separately from Store version identities; the unchanged-main control must reach the specific missing-edge observation. |
+| [`native_dataset_browser_fixture.py`](native_dataset_browser_fixture.py) | Owned loopback daemon and read-only stdin Store inspection for that acceptance; only model replies, external Zenodo responses and profile readiness are fixtures. No manually seeded analysis Artifact or lineage edge. |
 | [`test_dataset_import_live.py`](test_dataset_import_live.py) | Opt-in real PaRoutes import and Store reopen through the native capture transaction; never part of the default offline suite. |
 | [`test_dataset_import.py`](test_dataset_import.py) | Offline discovery/selection, permissions, cancellation and native capture; real-kernel analysis retains the exact input version and automatic lineage across same-byte reimports, refused replacements and Store reopen. |
 | [`test_download_integrity.py`](test_download_integrity.py) | Source size/checksum checks, bounded streams, cancellation and publication ordering. |

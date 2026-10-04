@@ -2,6 +2,13 @@
 
 [中文说明](README_zh.md)
 
+`native-dataset-browser-validation.yml` is a fork-only, credential-free Linux
+validation of a fixed public production SHA using separately checked-out
+browser/daemon helpers. It verifies the joined native input-to-result browser
+flow and an unchanged-main missing-edge control. Only sanitized receipts and
+synthetic screenshots are uploaded; daemon data/token files stay local. It does
+not replace upstream PR CI, code-owner approval or sandbox/live-model gates.
+
 Everything CI does to this repository is in these five files: the default gate
 every pull request has to pass, plus release publication, container-image
 publication, bounded protocol fuzzing, and Scorecard. They run
