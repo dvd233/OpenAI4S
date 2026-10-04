@@ -1,0 +1,137 @@
+# Fork-only checks of a fixed public test candidate. No private source,
+# publication, repository secrets, or self-hosted resources are used.
+name: Settings lazy mount validation
+
+on:
+  push:
+    branches: [test/settings-lazy-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: 490ddf8141eaac796e36810c49a2e7d2edaf3ac7
+
+jobs:
+  frontend:
+    if: github.repository == 'dvd233/OpenAI4S'
+    name: Frontend contracts (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24"]
+    steps:
+      - name: Checkout exact public candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install pinned frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts
+      - name: Run complete frontend contracts
+        run: npm test --prefix frontend -- --reporter=json --outputFile="$GITHUB_WORKSPACE/frontend-results.json"
+      - name: Verify frontend types
+        run: npm run typecheck --prefix frontend
+      - name: Confirm the F19 success and retry cases executed
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const result = JSON.parse(fs.readFileSync('frontend-results.json','utf8'));
+          const cases = result.testResults.flatMap(s => s.assertionResults);
+          for (const suffix of [
+            'window.openCust mounts the Settings UI once, then opens the tab',
+            'loads the Settings chunk once, and again after a failed load',
+          ]) {
+            const matched = cases.filter(c => c.fullName.endsWith(suffix));
+            if (matched.length !== 1 || matched[0].status !== 'passed') throw new Error('F19 case absent or not passed: '+suffix);
+          }
+          if (!result.success || result.numFailedTests !== 0) throw new Error('Full frontend gate not green');
+          console.log(JSON.stringify({source:process.env.SOURCE_SHA,passed:result.numPassedTests,failed:result.numFailedTests,F19:'executed and passed'}));
+          JS
+      - name: Confirm a simulated mount failure still fails the success case
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const root = process.cwd();
+          const temp = process.env.RUNNER_TEMP;
+          const pkg = path.join(root,'frontend/node_modules/vitest/dist/index.js').replace(/\\/g,'/');
+          const mount = path.join(root,'frontend/src/features/customize/mount.ts');
+          const setup = path.join(temp,'f19-negative-setup.mts');
+          fs.writeFileSync(setup,`import {vi} from ${JSON.stringify(pkg)};\nvi.doMock(${JSON.stringify(mount)},()=>({mountCustomize:()=>{throw new Error('Synthetic Settings mount failure');}}));\n`);
+          const config = path.join(temp,'f19-negative-config.mts');
+          const base = path.join(root,'frontend/vite.config.ts').replace(/\\/g,'/');
+          fs.writeFileSync(config,`import base from ${JSON.stringify(base)};\nexport default {...base,test:{...base.test,setupFiles:[${JSON.stringify(setup)}]}};\n`);
+          JS
+          set +e
+          npm test --prefix frontend -- --config "$RUNNER_TEMP/f19-negative-config.mts" src/features/customize/timers.test.ts -t 'window.openCust mounts the Settings UI once, then opens the tab' --reporter=json --outputFile="$RUNNER_TEMP/f19-negative.json"
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const result = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP,'f19-negative.json'),'utf8'));
+          const failed = result.testResults.flatMap(s=>s.assertionResults).filter(c=>c.status==='failed');
+          if (result.success || result.numTotalTests !== 10 || result.numPassedTests !== 0 || result.numFailedTests !== 1 || result.numPendingTests !== 9 || result.testResults.length !== 1 || result.testResults.some(s=>s.message) || failed.length !== 1 || !failed[0].fullName.endsWith('window.openCust mounts the Settings UI once, then opens the tab')) throw new Error('Negative control failed at another seam');
+          const messages = failed[0].failureMessages;
+          const expectedAssertion = /^AssertionError: expected false to be true[^\n]*\n\s+at .*\/frontend\/src\/features\/customize\/timers\.test\.ts:218:33(?:\n|$)/;
+          if (messages.length !== 1 || !expectedAssertion.test(messages[0].replace(/\\/g,'/'))) throw new Error('Negative control did not fail at the expected open-state assertion');
+          console.log('A simulated mount-boundary failure still fails the success assertion');
+          JS
+
+  static:
+    if: github.repository == 'dvd233/OpenAI4S'
+    name: Full static and documentation gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev dependencies
+        run: uv sync --locked
+      - name: Full pre-commit
+        run: uv run pre-commit run --all-files
+      - name: Core types
+        run: uv run mypy
+      - name: Bilingual directory coverage
+        run: uv run python scripts/check_directory_readmes.py
+      - name: Source credential scan
+        run: uv run python scripts/source_secret_scan.py
+
+  offline:
+    if: github.repository == 'dvd233/OpenAI4S'
+    name: Full offline suite (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev and science dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Full default offline suite
+        run: uv run pytest -n auto --maxprocesses=4 --dist loadfile
