@@ -125,7 +125,7 @@ async function verifyViewer(page, api, input, first, latest, result) {
   await page.locator(".prov-subtab").filter({ hasText: "Review" }).click();
   await waitUntil("real displayed input label", async () => (await page.locator(".prov-body").innerText()).includes("datasets/spectra.csv"));
   const review = await page.locator(".prov-body").innerText();
-  await page.screenshot({ path: path.join(outputRoot, `lineage-round-${round}.png`) });
+  await page.screenshot({ path: path.join(outputRoot, `lineage-round-${round}.png`), animations: "disabled" });
   const projected = await api(`/artifacts/${result.artifact_id}/lineage?version=${result.versions[0].version_id}`);
   assert.equal(projected.version_id, result.versions[0].version_id);
   assert.ok(projected.dependency_mappings.inputs.includes("datasets/spectra.csv"));
@@ -141,7 +141,11 @@ async function verifyViewer(page, api, input, first, latest, result) {
   assert.ok(oldRow?.source.includes("Synthetic initial source"), JSON.stringify(displayed));
   assert.ok(!oldRow.source.includes("Later source annotation"));
   assert.ok(newRow?.source.includes("Later source annotation"));
-  await page.screenshot({ path: path.join(outputRoot, `sources-round-${round}.png`) });
+  await page.screenshot({ path: path.join(outputRoot, `sources-round-${round}.png`), animations: "disabled" });
+  const oldSourceTitle = page.getByText("Synthetic initial source", { exact: true });
+  await oldSourceTitle.scrollIntoViewIfNeeded();
+  await oldSourceTitle.waitFor({ state: "visible" });
+  await page.screenshot({ path: path.join(outputRoot, `sources-old-round-${round}.png`), animations: "disabled" });
   evidence.phases.push({ phase: "browser-source-history", first_version: first.version_id, latest_version: latest.version_id, both_source_titles_correct: true });
 }
 
