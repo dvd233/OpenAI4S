@@ -2,6 +2,11 @@
 
 [English](README.md)
 
+`paroutes-live-validation.yml` 仅在 fork 显式运行网络验收，使用维护者选定的
+PaRoutes `n1-targets.txt`。它在固定公开源码 SHA 上执行既有的可选真实原生导入及
+Store 重开契约，核验 465,689 字节的 MD5/SHA256 身份，并要求实际执行且不跳过。
+无模型或仓库 secret，不修改生产 benchmark registry；默认离线与外部 PR CI 保持独立。
+
 仓库的 CI 全在这五个文件里：每个 PR 都要过的默认检查门，加上 release 发布、
 容器镜像发布、有界协议模糊测试和 Scorecard。它们只用来跑这个仓库的代码，不会随 Python 包一起发布。
 

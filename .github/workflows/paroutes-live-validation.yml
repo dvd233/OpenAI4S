@@ -1,0 +1,52 @@
+# Explicit fork-only network acceptance of one maintainer-selected public file.
+# Production code is frozen separately; default offline/PR CI is untouched.
+name: PaRoutes current-source live acceptance
+
+on:
+  push:
+    branches: [test/native-paroutes-current-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: cfc5bb46fe577aabb4be58122216164664301a23
+
+jobs:
+  paroutes:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/native-paroutes-current-validation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout the exact public production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Verify source and existing live contract identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain)"
+          test -f tests/test_dataset_import_live.py
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked test dependencies
+        run: uv sync --locked
+      - name: Real native import, frozen checksum and Store reopen
+        run: uv run pytest tests/test_dataset_import_live.py -m network -v -s --junitxml=paroutes-live.xml
+      - name: Require the live contract to execute and pass
+        if: success() || failure()
+        run: |
+          uv run python - <<'PY'
+          import json
+          from xml.etree import ElementTree
+          root = ElementTree.parse('paroutes-live.xml').getroot()
+          cases = list(root.iter('testcase'))
+          assert len(cases) == 1
+          assert cases[0].attrib['name'] == 'test_paroutes_native_import_and_store_reopen'
+          assert not any(cases[0].find(kind) is not None for kind in ('skipped', 'failure', 'error'))
+          print(json.dumps({'contract': cases[0].attrib['name'], 'executed': 1, 'passed': 1, 'remote_file': 'n1-targets.txt', 'scope': 'one-file integrity and native capture/reopen; no model, scientific accuracy or benchmark admission'}))
+          PY
+      - name: Verify production code stayed unchanged
+        run: test -z "$(git status --porcelain --untracked-files=no)"

@@ -2,6 +2,13 @@
 
 [中文说明](README_zh.md)
 
+`paroutes-live-validation.yml` is a fork-only, explicit network acceptance for
+the maintainer-selected PaRoutes `n1-targets.txt` file. It runs the existing
+opt-in live native-import/Store-reopen contract at one fixed public source SHA,
+pins the 465,689-byte MD5/SHA256 identity, and requires actual execution without
+skip. It uses no model or repository secret and changes no production benchmark
+registry. The default offline and external-PR workflows stay separate.
+
 Everything CI does to this repository is in these five files: the default gate
 every pull request has to pass, plus release publication, container-image
 publication, bounded protocol fuzzing, and Scorecard. They run
