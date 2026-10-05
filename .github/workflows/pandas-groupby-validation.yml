@@ -1,0 +1,143 @@
+# Fork-only verification of a fixed contribution source.
+# Jobs check out SOURCE_SHA, not this workflow branch. No publication or
+# repository secrets are used. Upstream PR CI remains required before merge.
+name: Pandas grouped provenance acceptance
+
+on:
+  push:
+    branches: [test/pandas-groupby-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: af5131d83e6c450bc845c0189da3698172706a00
+
+jobs:
+  dataset:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/pandas-groupby-validation'
+    name: Grouped provenance (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install locked dev and science dependencies
+        run: uv sync --locked --extra science
+      - name: Run grouped provenance and explicit Kernel Agent Gateway contracts
+        run: uv run pytest tests/test_provenance_groupby.py tests/test_provenance.py tests/test_provenance_paths.py tests/test_artifact_scope_closure.py tests/test_kernel.py tests/test_agent.py tests/test_gateway.py -v --junitxml=groupby-input.xml
+      - name: Confirm all 22 grouped provenance cases actually executed
+        if: success() || failure()
+        run: |
+          uv run python - <<'PY'
+          import sys
+          import pandas as pd
+          from xml.etree import ElementTree
+          root = ElementTree.parse("groupby-input.xml").getroot()
+          cases = [case for case in root.iter("testcase")
+                   if case.attrib.get("classname") == "tests.test_provenance_groupby"]
+          assert len(cases) == 22, "expected all 22 grouped provenance cases"
+          assert all(not any(case.find(kind) is not None
+                             for kind in ("skipped", "failure", "error"))
+                     for case in cases), "a grouped provenance case did not pass"
+          native = [case for case in cases
+                    if case.attrib["name"] == "test_real_kernel_grouped_writer_and_store_reopen"]
+          assert len(native) == 1, "real Kernel/ArtifactManager/Store case must execute"
+          expected_pandas = "2.3.3" if sys.version_info[:2] == (3, 10) else "3.0.3"
+          assert pd.__version__ == expected_pandas, (pd.__version__, expected_pandas)
+          print(f"All 22 grouped provenance cases executed successfully; pandas {pd.__version__}; real Kernel/Store case passed")
+          PY
+
+  offline:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/pandas-groupby-validation'
+    name: Full offline suite (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev, science and chemistry dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Run complete offline suite
+        run: uv run pytest -n auto --maxprocesses=4 --dist loadfile
+
+  static:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/pandas-groupby-validation'
+    name: Full pre-commit, types, documentation and source scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev dependencies
+        run: uv sync --locked
+      - name: Run full pre-commit
+        run: uv run pre-commit run --all-files
+      - name: Verify core types
+        if: success() || failure()
+        run: uv run mypy
+      - name: Verify bilingual directory documentation
+        if: success() || failure()
+        run: uv run python scripts/check_directory_readmes.py
+      - name: Scan tracked sources for credentials
+        if: success() || failure()
+        run: uv run python scripts/source_secret_scan.py
+
+  contracts:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/pandas-groupby-validation'
+    name: Frozen response shapes, route contracts and offline PR harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev, science and chemistry dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Check frozen response shapes against real offline responses
+        run: uv run python scripts/capture_response_schemas.py --check
+      - name: Check route contract coverage
+        if: success() || failure()
+        run: uv run python scripts/capture_response_contract.py --check
+      - name: Run deterministic offline PR harness
+        if: success() || failure()
+        run: uv run python -m harness.cli run --tier pr --offline
