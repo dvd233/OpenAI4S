@@ -18,6 +18,8 @@ OpenAI4S 的离线正确性门禁。`uv run pytest` 用确定性 fake 跑完这�
 
 | 文件 | 职责 |
 | --- | --- |
+| [`browser_paroutes_groupby.mjs`](browser_paroutes_groupby.mjs) | 仅 fork、显式启用的真实 PaRoutes 自动分组血缘验收：两次原生导入、独立原字节直方图核对、不显式调用 SDK 保存的精确旧版输入边、浏览器 Code/Review/版本来源与 daemon 正常重开无重放。固定公开 dataset/GroupBy 集成源码，不证明科研准确率或 owner 身份。 |
+| [`paroutes_groupby_browser_service.py`](paroutes_groupby_browser_service.py) | 自动 PaRoutes 分组血缘验收的自有 loopback daemon 与只读 Store 检查；DOI/文件使用真实 HTTP 传输，仅模型回复和 standard-profile 就绪状态为 fixture。分析调用普通 pandas writer，不手工保存输入边。 |
 | [`test_provenance_groupby.py`](test_provenance_groupby.py) | 已知 Artifact 标签经过 pandas 分组聚合及列选择仍保留；检查真实 pandas 值/异常、关闭/未追踪数据、追踪故障、外部分组操作数以及真实 Kernel/Store 重开，不手工写入输出血缘边。 |
 | [`test_compute_job_routes.py`](test_compute_job_routes.py) | compute-jobs 路由必须给领域失败一个 HTTP 状态：读取或取消不存在的作业、以及每一次被拒绝的提交，过去都被序列化为携带软 `{"error": ...}` 的 200——于是工作台把不存在的作业显示为「输出为空」，把被拒绝的提交显示为已接受。现在不存在的作业是 404；未能停止一个仍在运行的作业的取消是 500（不是 404——它存在）；客户端输入错误（含字段类型错误与 `NaN` 截止时间）是 400；容量/工作区/关停分别是 429/500/503；未登记的 code 是 400 而不是 200——与 skills 共用同一个按 code 投影的 `_soft_failure_status`，且管理器返回的每个 code 都必须登记在 `JOB_FAILURE_STATUS` 中。 |
 | [`test_dataset_import_live.py`](test_dataset_import_live.py) | 显式启用的真实 PaRoutes 原生导入与 Store 重开验收；不属于默认离线套件。 |

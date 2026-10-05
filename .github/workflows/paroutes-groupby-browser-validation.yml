@@ -1,0 +1,196 @@
+# Fork-only, opt-in network acceptance for the maintainer-selected n1 file.
+name: Automatic PaRoutes grouped provenance acceptance
+
+on:
+  push:
+    branches: [test/paroutes-groupby-browser-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: d8a441b6f40549e1928c42b64e452c8a1b33edd0
+  GROUPBY_SOURCE_SHA: af5131d83e6c450bc845c0189da3698172706a00
+  DATASET_SOURCE_SHA: b37808e0e095e81e56926f15d206677feef5c518
+
+jobs:
+  browser:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/paroutes-groupby-browser-validation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout helpers at the triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: helpers
+          persist-credentials: false
+      - name: Checkout exact public production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+      - name: Verify the exact joined public source and both component commits
+        working-directory: source
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          git merge-base --is-ancestor "$GROUPBY_SOURCE_SHA" HEAD
+          git merge-base --is-ancestor "$DATASET_SOURCE_SHA" HEAD
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install locked science and browser dependencies
+        working-directory: source
+        run: |
+          uv sync --locked --extra science
+          npm ci --ignore-scripts
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Validate helpers and directory inventory
+        working-directory: helpers
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/source/.venv
+          UV_NO_SYNC: "1"
+        run: |
+          uv run pre-commit run --all-files
+          node --check tests/browser_paroutes_groupby.mjs
+          uv run python scripts/check_directory_readmes.py
+          uv run python scripts/source_secret_scan.py
+          git diff --check
+      - name: Real discovery, native import, analysis, browser and reopen
+        working-directory: source
+        env:
+          OPENAI4S_SOURCE_ROOT: ${{ github.workspace }}/source
+          OPENAI4S_SOURCE_SHA: ${{ env.SOURCE_SHA }}
+          OPENAI4S_GROUPBY_SOURCE_SHA: ${{ env.GROUPBY_SOURCE_SHA }}
+          OPENAI4S_DATASET_SOURCE_SHA: ${{ env.DATASET_SOURCE_SHA }}
+          OPENAI4S_PYTHON: ${{ github.workspace }}/source/.venv/bin/python
+          OPENAI4S_PAROUTES_BROWSER_OUTPUT: ${{ runner.temp }}/paroutes-groupby-browser-evidence
+        run: node ../helpers/tests/browser_paroutes_groupby.mjs
+      - name: Confirm all actual phases and unchanged source
+        working-directory: source
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/paroutes-groupby-browser-evidence
+        run: |
+          .venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads((Path(os.environ['OUTPUT_ROOT']) / 'receipt.json').read_text())
+          assert receipt['status'] == 'passed'
+          assert receipt['source_sha'] == os.environ['SOURCE_SHA']
+          assert receipt['groupby_source_sha'] == os.environ['GROUPBY_SOURCE_SHA']
+          assert receipt['dataset_source_sha'] == os.environ['DATASET_SOURCE_SHA']
+          assert receipt['live_zenodo'] is True
+          assert receipt['fixture_boundaries'] == ['model replies', 'standard profile readiness']
+          assert receipt['lineage_mode'] == 'automatic pandas GroupBy propagation and native writer capture'
+          assert receipt['automatic_groupby_lineage_claim'] is True
+          assert receipt['production_benchmark_admitted'] is False
+          assert receipt['chemical_accuracy_claim'] is False
+          phases = [p['phase'] for p in receipt['phases']]
+          assert phases.count('real-paroutes-analysis') == 1
+          assert phases.count('browser-provenance') == 2
+          assert phases.count('browser-source-history') == 2
+          assert phases.count('shutdown') == 2 and phases.count('reopen') == 1
+          reopen = next(p for p in receipt['phases'] if p['phase'] == 'reopen')
+          assert reopen['result_version_retained'] and reopen['result_producing_cell_retained']
+          assert reopen['version_counts_retained'] and reopen['real_kernel_cell_calls'] == 0
+          assert not receipt['browser_errors'] and not receipt['external_browser_requests']
+          print(json.dumps({'source': receipt['source_sha'], 'phases': phases}))
+          PY
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Preserve sanitized receipts and attributed dataset screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: paroutes-groupby-browser-evidence
+          path: |
+            ${{ runner.temp }}/paroutes-groupby-browser-evidence/receipt.json
+            ${{ runner.temp }}/paroutes-groupby-browser-evidence/*-inspection-*.png
+          if-no-files-found: error
+          retention-days: 14
+
+  offline:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/paroutes-groupby-browser-validation'
+    name: Full offline suite (Python 3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev, science and chemistry dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Run complete offline suite
+        run: uv run pytest -n auto --maxprocesses=4 --dist loadfile
+
+  static:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/paroutes-groupby-browser-validation'
+    name: Full pre-commit, types, documentation and source scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev dependencies
+        run: uv sync --locked
+      - name: Run full pre-commit
+        run: uv run pre-commit run --all-files
+      - name: Verify core types
+        if: success() || failure()
+        run: uv run mypy
+      - name: Verify bilingual directory documentation
+        if: success() || failure()
+        run: uv run python scripts/check_directory_readmes.py
+      - name: Scan tracked sources for credentials
+        if: success() || failure()
+        run: uv run python scripts/source_secret_scan.py
+
+  contracts:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/paroutes-groupby-browser-validation'
+    name: Frozen response shapes, route contracts and offline PR harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout fixed contribution source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify source identity
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - name: Install locked dev, science and chemistry dependencies
+        run: uv sync --locked --extra science --extra chemistry
+      - name: Check frozen response shapes against real offline responses
+        run: uv run python scripts/capture_response_schemas.py --check
+      - name: Check route contract coverage
+        if: success() || failure()
+        run: uv run python scripts/capture_response_contract.py --check
+      - name: Run deterministic offline PR harness
+        if: success() || failure()
+        run: uv run python -m harness.cli run --tier pr --offline
