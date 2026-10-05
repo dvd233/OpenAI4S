@@ -13,7 +13,9 @@ not replace upstream PR CI, code-owner approval or sandbox/live-model gates.
 for the maintainer-selected PaRoutes `n1-targets.txt` from record `6275421`.
 Only that public file is downloaded; real metadata/bytes pass through native
 capture, a pandas target-length histogram, workbench provenance and reopen.
-Model replies and readiness are fixtures. Byte identity/traceability does not
+Model replies and readiness are fixtures.
+GroupBy output uses the public in-kernel `host.save_artifact` input-ID API;
+automatic GroupBy tag propagation is not claimed. Byte identity/traceability does not
 establish chemical accuracy, production dataset admission or private-fix
 validation. Screenshots attribute the recorded source; daemon/token files are
 excluded from uploaded evidence.

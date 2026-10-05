@@ -11,7 +11,9 @@ PR CI、code-owner 审批或 sandbox/live-model 门禁。
 `native-paroutes-browser-validation.yml` 是另行显式运行的 fork 工作流，
 使用维护者选择的 record `6275421` 中唯一的 PaRoutes `n1-targets.txt`。
 真实元数据/字节经过原生 capture、pandas 目标字符串长度直方图、工作台溯源
-和重启；模型回复与就绪检查使用 fixture。字节身份/溯源不代表化学准确率、
+和重启；模型回复与就绪检查使用 fixture。
+GroupBy 结果通过内核公开 `host.save_artifact` 输入 ID 接口记录血缘，
+不宣称 GroupBy 自动标签传播。字节身份/溯源不代表化学准确率、
 生产数据集准入或私密修复验证。截图包含记录来源；不上传 daemon/token 文件。
 
 下列五个上游工作流提供每个 PR 都要过的默认检查门，加上 release 发布、

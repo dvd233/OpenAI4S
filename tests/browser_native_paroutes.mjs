@@ -19,7 +19,7 @@ fs.mkdirSync(outputRoot, { recursive: true });
 const dataDir = fs.mkdtempSync(path.join(outputRoot, "owned-daemon-"));
 assert.notEqual(dataDir, path.join(os.homedir(), ".openai4s"));
 const helper = fileURLToPath(new URL("./native_paroutes_browser_service.py", import.meta.url));
-const evidence = { source_sha: process.env.OPENAI4S_SOURCE_SHA, live_zenodo: true, fixture_boundaries: ["model replies", "standard profile readiness"], production_benchmark_admitted: false, chemical_accuracy_claim: false, phases: [], browser_errors: [], external_browser_requests: [] };
+const evidence = { source_sha: process.env.OPENAI4S_SOURCE_SHA, live_zenodo: true, fixture_boundaries: ["model replies", "standard profile readiness"], lineage_mode: "real in-kernel host.save_artifact with explicit input_version_ids", automatic_groupby_lineage_claim: false, production_benchmark_admitted: false, chemical_accuracy_claim: false, phases: [], browser_errors: [], external_browser_requests: [] };
 let child, context, browser, token = "", childLogs = () => "", inspectionSerial = 0;
 
 async function unusedPort() {
@@ -122,6 +122,8 @@ async function verifyViewer(page, api, input, first, latest, result) {
   await waitUntil("real old-version analysis source", async () => (await page.locator(".prov-body").innerText()).includes(`host.artifact_path('${first.version_id}')`));
   const code = await page.locator(".prov-body").innerText();
   assert.ok(!code.includes(`host.artifact_path('${latest.version_id}')`));
+  assert.ok(code.includes("host.save_artifact('summary.json'"), "visible code must show the explicit public SDK lineage declaration");
+  assert.ok(code.includes(`input_version_ids=['${first.version_id}']`));
   await page.locator(".prov-subtab").filter({ hasText: "Review" }).click();
   await waitUntil("real displayed input label", async () => (await page.locator(".prov-body").innerText()).includes("datasets/n1-targets.txt"));
   const review = await page.locator(".prov-body").innerText();

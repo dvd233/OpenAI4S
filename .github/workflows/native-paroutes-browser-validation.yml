@@ -73,6 +73,10 @@ jobs:
           assert receipt['source_sha'] == os.environ['SOURCE_SHA']
           assert receipt['live_zenodo'] is True
           assert receipt['fixture_boundaries'] == ['model replies', 'standard profile readiness']
+          assert receipt['lineage_mode'] == 'real in-kernel host.save_artifact with explicit input_version_ids'
+          assert receipt['automatic_groupby_lineage_claim'] is False
+          assert receipt['production_benchmark_admitted'] is False
+          assert receipt['chemical_accuracy_claim'] is False
           phases = [p['phase'] for p in receipt['phases']]
           assert phases.count('real-paroutes-analysis') == 1
           assert phases.count('browser-provenance') == 2

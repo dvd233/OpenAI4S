@@ -108,6 +108,10 @@ def scripted_chat(messages, _cfg, on_delta=None, **_kwargs):
             "summary = data.groupby('target_length', as_index=False).agg(targets=('target', 'count'))\n"
             f"summary['input_version'] = {version!r}\n"
             "summary.to_json('summary.json', orient='records')\n"
+            # GroupBy creates a new DataFrame beyond the automatic reader/
+            # getitem/writer hooks. Register the genuine input through the
+            # public in-kernel API; no Store row or edge is manually seeded.
+            f"host.save_artifact('summary.json', content_type='application/json', input_version_ids=[{version!r}])\n"
             f"host.submit_output({{'files': ['summary.json'], 'input_version': {version!r}}}, ['Analysed the explicitly selected frozen input'])\n"
         )
     content = f"```python\n{code}\n```"
