@@ -38,7 +38,7 @@ jobs:
       - name: Install locked dev and science dependencies
         run: uv sync --locked --extra science
       - name: Run grouped provenance and explicit Kernel Agent Gateway contracts
-        run: uv run pytest tests/test_provenance_groupby.py tests/test_provenance.py tests/test_provenance_paths.py tests/test_artifact_scope_closure.py tests/test_kernel.py tests/test_agent.py tests/test_gateway.py -v --junitxml=groupby-input.xml
+        run: uv run pytest tests/test_provenance_groupby.py tests/test_provenance_identity.py tests/test_provenance_paths.py tests/test_artifact_scope_closure.py tests/test_kernel.py tests/test_agent.py tests/test_gateway.py -v --junitxml=groupby-input.xml
       - name: Confirm all 22 grouped provenance cases actually executed
         if: success() || failure()
         run: |
