@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  SOURCE_SHA: b37808e0e095e81e56926f15d206677feef5c518
+  SOURCE_SHA: ceb8d401fe894f2981ff8dd22770a4045aadf62b
 
 jobs:
   dataset:
