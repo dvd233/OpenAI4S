@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  SOURCE_SHA: cfc5bb46fe577aabb4be58122216164664301a23
+  SOURCE_SHA: b37808e0e095e81e56926f15d206677feef5c518
 
 jobs:
   dataset:
@@ -38,7 +38,7 @@ jobs:
       - name: Install locked dev and science dependencies
         run: uv sync --locked --extra science
       - name: Run real native dataset input and analysis contracts
-        run: uv run pytest tests/test_dataset_import.py tests/test_store.py tests/test_provenance_paths.py tests/test_artifact_scope_closure.py -v --junitxml=dataset-input.xml
+        run: uv run pytest tests/test_dataset_import.py tests/test_store.py tests/test_provenance_paths.py tests/test_artifact_scope_closure.py tests/test_kernel.py tests/test_agent.py tests/test_gateway.py -v --junitxml=dataset-input.xml
       - name: Confirm all six new workflow cases actually executed
         if: success() || failure()
         run: |
