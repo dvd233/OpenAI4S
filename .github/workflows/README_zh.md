@@ -8,7 +8,13 @@
 脱敏回执和合成数据截图，daemon 数据及 token 文件保留在本地。它不替代上游
 PR CI、code-owner 审批或 sandbox/live-model 门禁。
 
-仓库的 CI 全在这五个文件里：每个 PR 都要过的默认检查门，加上 release 发布、
+`native-paroutes-browser-validation.yml` 是另行显式运行的 fork 工作流，
+使用维护者选择的 record `6275421` 中唯一的 PaRoutes `n1-targets.txt`。
+真实元数据/字节经过原生 capture、pandas 目标字符串长度直方图、工作台溯源
+和重启；模型回复与就绪检查使用 fixture。字节身份/溯源不代表化学准确率、
+生产数据集准入或私密修复验证。截图包含记录来源；不上传 daemon/token 文件。
+
+下列五个上游工作流提供每个 PR 都要过的默认检查门，加上 release 发布、
 容器镜像发布、有界协议模糊测试和 Scorecard。它们只用来跑这个仓库的代码，不会随 Python 包一起发布。
 
 凭据扫描在 `ci.yml` 的源码凭据扫描任务里，由

@@ -9,7 +9,16 @@ flow and an unchanged-main missing-edge control. Only sanitized receipts and
 synthetic screenshots are uploaded; daemon data/token files stay local. It does
 not replace upstream PR CI, code-owner approval or sandbox/live-model gates.
 
-Everything CI does to this repository is in these five files: the default gate
+`native-paroutes-browser-validation.yml` is a separately opt-in fork workflow
+for the maintainer-selected PaRoutes `n1-targets.txt` from record `6275421`.
+Only that public file is downloaded; real metadata/bytes pass through native
+capture, a pandas target-length histogram, workbench provenance and reopen.
+Model replies and readiness are fixtures. Byte identity/traceability does not
+establish chemical accuracy, production dataset admission or private-fix
+validation. Screenshots attribute the recorded source; daemon/token files are
+excluded from uploaded evidence.
+
+The five upstream workflows below provide the default gate
 every pull request has to pass, plus release publication, container-image
 publication, bounded protocol fuzzing, and Scorecard. They run
 against the code but are not shipped as part of the Python package.

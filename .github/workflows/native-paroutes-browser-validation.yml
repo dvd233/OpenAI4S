@@ -1,0 +1,95 @@
+# Fork-only, opt-in network acceptance for the maintainer-selected n1 file.
+name: Real PaRoutes browser acceptance
+
+on:
+  push:
+    branches: [test/native-paroutes-browser-validation]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: cfc5bb46fe577aabb4be58122216164664301a23
+
+jobs:
+  browser:
+    if: github.repository == 'dvd233/OpenAI4S' && github.ref == 'refs/heads/test/native-paroutes-browser-validation'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout helpers at the triggering commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: helpers
+          persist-credentials: false
+      - name: Checkout exact public production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          path: source
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+      - name: Install locked science and browser dependencies
+        working-directory: source
+        run: |
+          uv sync --locked --extra science
+          npm ci --ignore-scripts
+          ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Validate helpers and directory inventory
+        working-directory: helpers
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/source/.venv
+          UV_NO_SYNC: "1"
+        run: |
+          uv run pre-commit run --all-files
+          node --check tests/browser_native_paroutes.mjs
+          uv run python scripts/check_directory_readmes.py
+          uv run python scripts/source_secret_scan.py
+          git diff --check
+      - name: Real discovery, native import, analysis, browser and reopen
+        working-directory: source
+        env:
+          OPENAI4S_SOURCE_ROOT: ${{ github.workspace }}/source
+          OPENAI4S_SOURCE_SHA: ${{ env.SOURCE_SHA }}
+          OPENAI4S_PYTHON: ${{ github.workspace }}/source/.venv/bin/python
+          OPENAI4S_PAROUTES_BROWSER_OUTPUT: ${{ runner.temp }}/paroutes-browser-evidence
+        run: node ../helpers/tests/browser_native_paroutes.mjs
+      - name: Confirm all actual phases and unchanged source
+        working-directory: source
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/paroutes-browser-evidence
+        run: |
+          .venv/bin/python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipt = json.loads((Path(os.environ['OUTPUT_ROOT']) / 'receipt.json').read_text())
+          assert receipt['status'] == 'passed'
+          assert receipt['source_sha'] == os.environ['SOURCE_SHA']
+          assert receipt['live_zenodo'] is True
+          assert receipt['fixture_boundaries'] == ['model replies', 'standard profile readiness']
+          phases = [p['phase'] for p in receipt['phases']]
+          assert phases.count('real-paroutes-analysis') == 1
+          assert phases.count('browser-provenance') == 2
+          assert phases.count('browser-source-history') == 2
+          assert phases.count('shutdown') == 2 and phases.count('reopen') == 1
+          assert not receipt['browser_errors'] and not receipt['external_browser_requests']
+          print(json.dumps({'source': receipt['source_sha'], 'phases': phases}))
+          PY
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Preserve sanitized receipts and attributed dataset screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: paroutes-browser-evidence
+          path: |
+            ${{ runner.temp }}/paroutes-browser-evidence/receipt.json
+            ${{ runner.temp }}/paroutes-browser-evidence/*-round-*.png
+          if-no-files-found: error
+          retention-days: 14

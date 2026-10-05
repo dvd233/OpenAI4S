@@ -20,6 +20,8 @@ OpenAI4S 的离线正确性门禁。`uv run pytest` 用确定性 fake 跑完这�
 | --- | --- |
 | [`browser_native_dataset.mjs`](browser_native_dataset.mjs) | 仅 fork 运行的 Linux 浏览器验收：真实 composer 驱动发现、两次同字节原生导入、显式旧版本 Python 分析、确切持久输入边、可见代码与来源历史，以及 daemon 重启且不重放。UI 的文件名标签与 Store 版本身份分别核验；未修改 main 的对照须执行到缺失版本边这一特定观察。 |
 | [`native_dataset_browser_fixture.py`](native_dataset_browser_fixture.py) | 验收专属回环 daemon 和 stdin 只读 Store 检查；仅模型回复、Zenodo 外部响应和环境就绪使用 fixture。测试不手工创建分析 Artifact 或血缘边。 |
+| [`browser_native_paroutes.mjs`](browser_native_paroutes.mjs) | 仅 fork 显式运行的真实 PaRoutes `n1-targets.txt` 验收：真实发现/原生导入、与原始字节独立对照的 pandas 目标字符串长度直方图、确切旧版本血缘、工作台来源历史和 daemon 重启不重放。输入必须匹配已核实 SHA256；只证明输入身份与溯源，不宣称生产基准准入或化学准确率。 |
+| [`native_paroutes_browser_service.py`](native_paroutes_browser_service.py) | 真实 PaRoutes 浏览器验收的专属回环 daemon；仅模型回复和环境就绪使用 fixture。元数据请求限制在准确 DOI 查询/record，文件请求限制为唯一选定的 `n1-targets.txt`，实际读取使用原生产 HTTP 传输。 |
 | [`test_dataset_import_live.py`](test_dataset_import_live.py) | 显式启用的真实 PaRoutes 原生导入与 Store 重开验收；不属于默认离线套件。 |
 | [`test_dataset_import.py`](test_dataset_import.py) | 离线发现/选择、权限、取消及原生捕获；真实内核分析在同字节再次导入、替换被拒和 Store 重开后仍绑定精确输入版本与自动血缘。 |
 | [`test_download_integrity.py`](test_download_integrity.py) | 来源大小/checksum、有界传输、取消及发布顺序。 |
