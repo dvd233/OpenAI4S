@@ -25,6 +25,7 @@ EXPECTED_SHA256 = "c0d1b48379e1ceb1129fba4bf3773f73f27bdb22bb4d468417e6e404d3210
 OBSERVED = {"model_fixture_calls": 0, "metadata_reads": 0, "file_reads": 0}
 real_metadata_fetch = webtools.web_fetch
 real_dataset_response = webtools._open_http_response
+real_guard_url = webtools._guard_url
 
 
 def native_reply(name: str, arguments: dict) -> dict:
@@ -117,13 +118,38 @@ def scripted_chat(messages, _cfg, on_delta=None, **_kwargs):
 
 def allow_metadata_url(url):
     parsed = urlparse(url)
-    if url.startswith("https://zenodo.org/api/records?"):
-        assert parse_qs(parsed.query)["q"] == [QUERY]
-        assert parse_qs(parsed.query)["size"] == ["1"]
-    elif url == "https://zenodo.org/api/records/6275421":
-        pass
+    assert parsed.scheme == "https" and parsed.netloc == "zenodo.org"
+    if parsed.path in {"/api/records", "/api/records/"}:
+        query = parse_qs(parsed.query)
+        assert set(query) <= {"q", "size", "type", "page"}
+        assert query["q"] == [QUERY] and query["size"] == ["1"]
+        assert query.get("type", ["dataset"]) == ["dataset"]
+        assert query.get("page", ["1"]) == ["1"]
+    elif parsed.path.rstrip("/") == "/api/records/6275421":
+        assert not parsed.query
     else:
         raise AssertionError("unapproved external metadata request")
+
+
+def is_selected_file_url(url):
+    parsed = urlparse(url)
+    return (
+        parsed.scheme == "https"
+        and parsed.netloc == "zenodo.org"
+        and parsed.path
+        in {
+            "/api/records/6275421/files/n1-targets.txt/content",
+            "/records/6275421/files/n1-targets.txt",
+        }
+        and parse_qs(parsed.query) in ({}, {"download": ["1"]})
+    )
+
+
+def guarded_url(url, *args, **kwargs):
+    # The production transport calls this before every redirect-hop request.
+    if not is_selected_file_url(url):
+        allow_metadata_url(url)
+    return real_guard_url(url, *args, **kwargs)
 
 
 def metadata_fetch(url, **_kwargs):
@@ -167,6 +193,7 @@ def main() -> int:
     gateway.chat = scripted_chat
     webtools.web_fetch = metadata_fetch
     webtools._open_http_response = dataset_response
+    webtools._guard_url = guarded_url
     server = gateway.serve_app(cfg, block=False)
     server.runner.standard_profile_readiness = lambda: {"ready": True}
     for tool, pattern in [

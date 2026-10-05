@@ -90,6 +90,6 @@ jobs:
           name: paroutes-browser-evidence
           path: |
             ${{ runner.temp }}/paroutes-browser-evidence/receipt.json
-            ${{ runner.temp }}/paroutes-browser-evidence/*-round-*.png
+            ${{ runner.temp }}/paroutes-browser-evidence/*-inspection-*.png
           if-no-files-found: error
           retention-days: 14
