@@ -175,13 +175,16 @@
     const lower = String(filename || "").toLowerCase();
     const features = [];
     let invalid = 0;
-    let format = /\.vcf(?:\.gz)?$/.test(lower) ? "VCF" : /\.(gff3?|gtf)$/.test(lower) ? "GFF" : /\.bedgraph$/.test(lower) ? "bedGraph" : "BED";
+    const declaredFormat = /\.vcf(?:\.gz)?$/.test(lower) ? "VCF" : /\.(gff3?|gtf)$/.test(lower) ? "GFF" : /\.bedgraph$/.test(lower) ? "bedGraph" : /\.bed$/.test(lower) ? "BED" : null;
+    let format = declaredFormat || "BED";
     for (const raw of normalizeLines(text)) {
       const line = raw.trim();
       if (!line || line[0] === "#" || /^track\s|^browser\s/i.test(line)) continue;
       const fields = raw.split("\t");
       let feature = null;
-      if (format === "VCF" || (fields.length >= 8 && /^\d+$/.test(fields[1] || "") && fields[3] && fields[4])) {
+      // Content inference is a fallback: valid BED8-12 and numeric GFF source
+      // fields can resemble VCF, but must not override a declared format.
+      if (format === "VCF" || (!declaredFormat && fields.length >= 8 && /^\d+$/.test(fields[1] || "") && fields[3] && fields[4])) {
         format = "VCF";
         const pos = Number(fields[1]);
         const ref = fields[3] || "";
@@ -190,7 +193,7 @@
           label: fields[2] && fields[2] !== "." ? fields[2] : `${ref}>${fields[4] || "?"}`,
           type: "variant", strand: "", score: fields[5] || "",
         };
-      } else if (format === "GFF" || fields.length >= 9) {
+      } else if (format === "GFF" || format === "GTF" || (!declaredFormat && fields.length >= 9)) {
         format = /\.gtf$/.test(lower) ? "GTF" : "GFF";
         const start = Number(fields[3]); const end = Number(fields[4]);
         if (Number.isFinite(start) && Number.isFinite(end)) feature = {
