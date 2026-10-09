@@ -23,7 +23,7 @@ name: CI
 
 on:
   push:
-    branches: [main, next]
+    branches: [main, next, test/genome-format-validation]
   pull_request:
   schedule:
     - cron: "23 18 * * *"
