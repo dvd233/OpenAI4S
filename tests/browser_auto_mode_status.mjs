@@ -771,6 +771,43 @@ async function phaseB(browser, owned, tripwire, previous) {
     check("B/held read delivered", slow.delivered());
     await closeStatus(page);
 
+    // Closing and reopening this menu starts a new read lifetime even when
+    // the conversation did not change and the previous opening is still loading.
+    for (const outcome of ["success", "failure"]) {
+      const reopening = await intercept(page, statusPath(previous.worked));
+      await openStatus(handle, /^loading$/);
+      const obsolete = await reopening.next(0);
+      if (outcome === "success") await obsolete.fetch();
+      await closeStatus(page);
+      await openStatus(handle, /^loading$/);
+      const current = await reopening.next(1);
+      await current.fetch();
+      const oldResponse = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === `/api/v1/frames/${previous.worked}/auto-mode`);
+      if (outcome === "success") {
+        await obsolete.deliver();
+      } else {
+        await obsolete.route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: '{"error":"x","code":"auto_mode_storage_unavailable"}',
+        });
+      }
+      await (await oldResponse).finished();
+      // Let the completed fetch and its painters run before inspecting the
+      // still-pending opening; merely observing the response is not enough.
+      await page.evaluate(() => new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      const pendingLines = await lines(page);
+      check(`B/menu reopen ignores previous ${outcome}`, Object.values(pendingLines).every((value) => value === c.loading),
+        JSON.stringify(pendingLines));
+      await current.deliver();
+      await waitUntil("reopened menu's own read shown", async () => (await block(page).getAttribute("data-phase")) === "ready");
+      check(`B/menu reopen accepts current read after old ${outcome}`, (await lineValue(page, "selection")) === c.builtIn);
+      await reopening.stop();
+      await closeStatus(page);
+    }
+
     let failures = 1;
     const flaky = async (route) => {
       if (failures > 0) {

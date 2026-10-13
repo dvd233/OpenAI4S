@@ -11,6 +11,8 @@
  *
  * Which response wins:
  *
+ * - A response from a previous opening of the session options menu is dropped,
+ *   even when the conversation is unchanged and both openings are still loading.
  * - A response for another conversation, or for an earlier opening of this one
  *   (`_openGen` moved: branch activation and revert both reopen the
  *   conversation), is dropped. That is what makes a branch change safe.
@@ -163,6 +165,8 @@ export async function refreshAutoModeStatus(): Promise<void> {
  */
 export function beginAutoModeStatusRead(): Promise<void> {
   syncAutoModeContext();
+  epoch += 1;
+  shown = null;
   const frameId = currentId.value;
   if (frameId && status.phase !== "loading") {
     status = { phase: "loading", frameId };

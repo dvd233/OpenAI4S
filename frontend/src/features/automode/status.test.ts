@@ -165,6 +165,72 @@ describe("ordering", () => {
   });
 });
 
+describe("menu openings", () => {
+  it.each([
+    ["success", "before"],
+    ["503", "before"],
+    ["success", "after"],
+    ["503", "after"],
+  ] as const)("ignores an earlier menu opening's %s arriving %s the current read", async (outcome, arrival) => {
+    const previous = beginAutoModeStatusRead();
+    expect(autoModeStatus()).toEqual({ phase: "loading", frameId: "f-root" });
+    // The menu is reopened while its previous GET is still pending; neither
+    // the conversation nor its branch-opening generation has changed.
+    const reopened = beginAutoModeStatusRead();
+    let whileCurrentPending = autoModeStatus();
+    const previousResponse = () => outcome === "success"
+      ? json(body(9, 4))
+      : json({ error: "storage", code: "auto_mode_storage_unavailable" }, 503);
+    if (arrival === "before") {
+      pending[0]!.respond(previousResponse());
+      await previous;
+      whileCurrentPending = autoModeStatus();
+    }
+    pending[1]!.respond(json(body(3, 1)));
+    await reopened;
+    if (arrival === "after") {
+      pending[0]!.respond(previousResponse());
+      await previous;
+    }
+    expect(whileCurrentPending).toEqual({ phase: "loading", frameId: "f-root" });
+    expect(autoModeStatus()).toMatchObject({
+      phase: "ready",
+      frameId: "f-root",
+      view: { last_event_ordinal: 3, selection: { revision: 1 } },
+    });
+  });
+
+  it("keeps cursor, selection and source revision ordering for hints within one reopened menu", async () => {
+    const previous = beginAutoModeStatusRead();
+    pending[0]!.respond(json(body(2)));
+    await previous;
+    const menu = beginAutoModeStatusRead();
+    const cursorHint = refreshAutoModeStatus();
+    const selectionHint = refreshAutoModeStatus();
+    const sourceHint = refreshAutoModeStatus();
+    const projectBody = (ordinal: number, revision: number, sourceRevision: number) => body(ordinal, revision, {
+      selection: selectionBody({ source: "project", revision, source_revision: sourceRevision }),
+    });
+    pending[4]!.respond(json(projectBody(6, 2, 2)));
+    await sourceHint;
+    // The first-issued read has the newer inherited setting; later-issued
+    // hints cannot replace it with an older cursor or selection revision.
+    pending[1]!.respond(json(projectBody(6, 2, 3)));
+    await menu;
+    pending[3]!.respond(json(projectBody(6, 1, 9)));
+    await selectionHint;
+    pending[2]!.respond(json(projectBody(5, 9, 9)));
+    await cursorHint;
+    expect(autoModeStatus()).toMatchObject({
+      phase: "ready",
+      view: {
+        last_event_ordinal: 6,
+        selection: { revision: 2, source: "project", source_revision: 3 },
+      },
+    });
+  });
+});
+
 describe("frame and branch changes", () => {
   it("drops a response for a conversation that is no longer open", async () => {
     const read = refreshAutoModeStatus();
