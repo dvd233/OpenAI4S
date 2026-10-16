@@ -1,0 +1,56 @@
+name: Existing OpenAI4S closeout validation
+on:
+  push:
+    branches: [codex/validate-openai4s-closeout-20261017]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: openai4s-closeout-195-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'dvd233/OpenAI4S' && github.repository_id == '1383248212' && github.repository_owner_id == '111864431' && github.ref == 'refs/heads/codex/validate-openai4s-closeout-20261017'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        pr: ['214', '215', '216']
+    env:
+      TARGET_PR: ${{ matrix.pr }}
+    steps:
+      - name: Check hosted disk before setup
+        run: |
+          python3 - <<'PY'
+          import os, shutil
+          free = shutil.disk_usage(os.environ['RUNNER_TEMP']).free
+          print({'free_bytes': free, 'required_bytes': 18 * 1024**3})
+          if free < 18 * 1024**3: raise SystemExit('Insufficient hosted disk budget')
+          PY
+      - name: Read validation driver only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          path: driver
+          sparse-checkout-cone-mode: false
+          sparse-checkout: .github/closeout/openai4s195.py
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Prepare and validate exact existing contribution
+        run: python3 driver/.github/closeout/openai4s195.py
+      - name: Keep logs and candidate even on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openai4s-195-pr${{ matrix.pr }}-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 6
