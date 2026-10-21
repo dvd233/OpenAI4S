@@ -86,7 +86,9 @@ jobs:
           npm run build --prefix frontend
           git diff --exit-code -- openai4s/server/webui/dist
           python3 scripts/check_directory_readmes.py
-          git diff --cached --check
+          # Review the contribution against its new base. Upstream imported
+          # CSV artifacts retain CRLF and are not this PR's whitespace edits.
+          git diff --cached --check "$UPSTREAM"
           git commit -m "Merge upstream main and rebuild workbench for PR #$PR"
           test "$(git show -s --format=%P)" = "$ORIGINAL $UPSTREAM"
           python3 - <<'PY'
