@@ -103,15 +103,57 @@ jobs:
           print('Final contribution paths:', sorted(changed))
           PY
           git diff --stat "$UPSTREAM" HEAD
-      - name: Publish a separate result branch for review
+      - name: Publish verified Git objects without changing any branch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          result_branch="chore/closeout-20261021-pr$PR-result"
-          auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth_header" push origin "HEAD:refs/heads/$result_branch"
-          result="$(git rev-parse HEAD)"
-          echo "RESULT_PR_${PR}=$result"
-          echo "PR #$PR prepared as [$result](https://github.com/dvd233/OpenAI4S/commit/$result) on $result_branch. Original PR branch has not been updated." >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import base64, json, os, subprocess, urllib.request
+          def git(*args):
+              return subprocess.check_output(['git', *args])
+          def post(resource, payload):
+              request = urllib.request.Request(
+                  'https://api.github.com/repos/dvd233/OpenAI4S/git/' + resource,
+                  data=json.dumps(payload).encode(), method='POST',
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                           'Accept': 'application/vnd.github+json',
+                           'User-Agent': 'OpenAI4S-existing-PR-closeout',
+                           'Content-Type': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+          upstream = os.environ['UPSTREAM']
+          entries = []
+          paths = git('diff', '--name-only', '--no-renames', '-z', upstream, 'HEAD').decode().split('\0')
+          for path in filter(None, paths):
+              assert not path.startswith('.github/'), path
+              record = git('ls-tree', 'HEAD', '--', path).decode().strip()
+              if not record:
+                  entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': None})
+                  continue
+              mode, kind, remainder = record.split(' ', 2)
+              oid = remainder.split('\t', 1)[0]
+              assert kind == 'blob' and mode == '100644', record
+              blob = post('blobs', {'encoding': 'base64', 'content': base64.b64encode(git('cat-file', 'blob', oid)).decode()})
+              assert blob['sha'] == oid, path
+              entries.append({'path': path, 'mode': mode, 'type': kind, 'sha': oid})
+          tree = post('trees', {'base_tree': git('rev-parse', upstream + '^{tree}').decode().strip(), 'tree': entries})
+          expected_tree = git('rev-parse', 'HEAD^{tree}').decode().strip()
+          assert tree['sha'] == expected_tree, (tree['sha'], expected_tree)
+          def identity(prefix):
+              name, email, date = git('show', '-s', '--format=%' + prefix + 'n%n%' + prefix + 'e%n%' + prefix + 'I').decode().strip().split('\n')
+              return {'name': name, 'email': email, 'date': date}
+          commit = post('commits', {
+              'message': git('show', '-s', '--format=%B').decode().rstrip('\n'),
+              'tree': expected_tree, 'parents': [os.environ['ORIGINAL'], upstream],
+              'author': identity('a'), 'committer': identity('c')})
+          assert commit['tree']['sha'] == expected_tree
+          assert [parent['sha'] for parent in commit['parents']] == [os.environ['ORIGINAL'], upstream]
+          receipt = {'pr': int(os.environ['PR']), 'sha': commit['sha'], 'tree': expected_tree,
+                     'parents': [parent['sha'] for parent in commit['parents']],
+                     'paths': [entry['path'] for entry in entries], 'branchesUpdated': False}
+          print('VERIFIED_RESULT=' + json.dumps(receipt, sort_keys=True))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Verified Git object receipt: ' + json.dumps(receipt, sort_keys=True) + '\n')
+          PY
