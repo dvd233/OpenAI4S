@@ -53,7 +53,8 @@ jobs:
           assert all(p.startswith('openai4s/server/webui/dist/') for p in paths), paths
           PY
           # Generated output is replaced only by the official build below.
-          git restore --source=HEAD --staged --worktree -- openai4s/server/webui/dist
+          git reset HEAD -- openai4s/server/webui/dist
+          git restore --source=HEAD --worktree -- openai4s/server/webui/dist
           test -z "$(git diff --name-only --diff-filter=U)"
       - name: Verify the original source and regression cases are unchanged
         shell: bash
